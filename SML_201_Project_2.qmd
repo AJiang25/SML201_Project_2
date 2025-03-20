@@ -22,7 +22,7 @@ our_team
 Fill the string `our_country` with the country of the football team you wish to follow during the World Cup. Only one country must be selected. The name of this country must be spelled exactly as it appears in the `wc_sched` dataset (linked below). Hence you must select one of the countries from this dataset. Although this task is worth no points, failing to complete this task will result in a three-point deduction.
 
 ```{r our_country}
-our_country = 'our_country'
+our_country = 'Argentina'
 ```
 
 ## Our Seed
@@ -32,14 +32,14 @@ Fill the value `our_seed` with a calculated seed to precede all random sampling 
 ```{r our_seed}
 # calculate the seed to be the sum of the PUIDs of each teammate and then the remainder after dividing by 1746.
 # for example, if you have two teammates with PUIDs 888888888 & 999999999,
-our_seed = sum(888888888, 999999999) %% 1746
+our_seed = sum(920327399, 999999999) %% 1746
 ```
 
 ------------------------------------------------------------------------
 
 ## Introduction
 
-The [FIFA World Cup](https://en.wikipedia.org/wiki/FIFA_World_Cup) is a quadrennial football (soccer in the US) tournament that captures the world's attention like no other sporting event. At its conclusion, one country will stand as the sole victor. Argentina is trhe reigning champion, having won the title in 2022.
+The [FIFA World Cup](https://en.wikipedia.org/wiki/FIFA_World_Cup) is a quadrennial football (soccer in the US) tournament that captures the world's attention like no other sporting event. At its conclusion, one country will stand as the sole victor. Argentina is the reigning champion, having won the title in 2022.
 
 Arguably, there is no greater single competitor in the history of this event than **Edson Arantes do Nascimento**, better known by his nickname **Pelé**. He led the Brazilian national team to three World Cup titles during his career.
 
