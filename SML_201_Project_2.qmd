@@ -32,7 +32,7 @@ Fill the value `our_seed` with a calculated seed to precede all random sampling 
 ```{r our_seed}
 # calculate the seed to be the sum of the PUIDs of each teammate and then the remainder after dividing by 1746.
 # for example, if you have two teammates with PUIDs 888888888 & 999999999,
-our_seed = sum(920327399, 999999999) %% 1746
+our_seed = sum(920327399, 999999999, 920400588) %% 1746
 ```
 
 ------------------------------------------------------------------------
@@ -189,7 +189,13 @@ Assume that you are already at the location of the first group stage match of yo
 
 ```{r a1a}
 itinerary = function(ctry, pdt, conn) {
+  #3 group matches for the country
+  matches = wc_sched %>% 
+    filter(ctry_a == ctry | ctry_b == ctry) %>% 
+    arrange(match_dt) %>% 
+    slice(1:3)
   
+  #nearest airports to each of the venues where the matches will be played
 }
 
 
