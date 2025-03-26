@@ -724,7 +724,7 @@ wc_matches |> gt() |>
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> Summary
+> In Part C, we simulated the group stage matches of the World Cup using the probabilistic model outlined in part C1. The results provided insights into how the offensive and defensive statistics can influence which country wins in a game. The game showed that countries with a good balance between offensive and defensive plays as well as higher statistics tended to fair better in their matches by either winning or tieing their games and vice versa. 
 
 ------------------------------------------------------------------------
 
