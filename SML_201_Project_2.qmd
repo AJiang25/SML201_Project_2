@@ -504,20 +504,34 @@ You can use either `highcharter` or `ggplot2`.
 
 ```{r b3b}
 #regression data (turn it back to nonlinear)
-wc_shots = wc_shots %>% 
+# wc_shots = wc_shots %>% 
+#   mutate(regression_data = exp(predict(model2)))
+
+
+# hchart(
+#   object = wc_shots,
+#   mapping = hcaes(x = d, y = xg),
+#   type = 'scatter'
+# ) |> 
+#   hc_plotOptions(scatter = list(marker = list(radius = 2))) %>% 
+#   hc_title(text = "xg vs d Scatter Plot") %>% 
+#   hc_xAxis(title = list(text = "Euclidean distance (d)")) %>% 
+#   hc_yAxis(title = list(text = "Expected Goal Probability (xg)")) %>% 
+#   hc_add_series(wc_shots, hcaes(x = d, y = regression_data), type = 'line')
+
+wc_shots <- wc_shots %>%
   mutate(regression_data = exp(predict(model2)))
 
+ggplot(wc_shots, aes(x = d, y = xg)) +
+  geom_point(alpha = 2) +
+  geom_line(aes(y = regression_data), color = "blue", size = 1) +
+  labs(
+    title = "Expected Goals vs Distance",
+    x = "Distance from Goal (yards)",
+    y = "Expected Goals (xG)"
+  ) +
+  theme_minimal()
 
-hchart(
-  object = wc_shots,
-  mapping = hcaes(x = d, y = xg),
-  type = 'scatter'
-) |> 
-  hc_plotOptions(scatter = list(marker = list(radius = 2))) %>% 
-  hc_title(text = "xg vs d Scatter Plot") %>% 
-  hc_xAxis(title = list(text = "Euclidean distance (d)")) %>% 
-  hc_yAxis(title = list(text = "Expected Goal Probability (xg)")) %>% 
-  hc_add_series(wc_shots, hcaes(x = d, y = regression_data), type = 'line')
 ```
 
 #### B4. Summary \[*3 pts*\]
@@ -572,7 +586,56 @@ The model will need to simulate a football match using these rules:
 
 ```{r c1}
 game_model = function(a, b) {
-  
+    stats_a = wc_countries %>%
+        filter(country == a)
+    stats_b = wc_countries %>%
+        filter(country == b)
+    
+    total_time = 0
+    goals_a = 0
+    goals_b = 0
+    posession = "a"
+
+    while (total_time < 90 * 60) { # 90 minutes
+        # ASK ABOUT THIS LINE
+        posession_time = max(5, rnorm(1, mean = 45, sd = 13)) # bare min time of 5
+
+        # Check if the first half ends
+        if (total_time < 45 * 60 && total_time + possession_time > 45 * 60) {
+            possession = "b" # Switch possession to country b at the start of the second half
+            total_time = 45 * 60 # End the first half
+            next
+        }
+
+        total_time = total_time + posession_time 
+        bias = sample(c("offensive", "defensive"), 1)
+
+        # Scoring Mechanics
+        if (posession == "a") {
+            if (bias == "offensive") { # Offensive bias for ctry_a
+                if (runif(1) < stats_a$osp && runif(1) < stats_a$ogs) {
+                    goals_a = goals_a + 1
+                }
+            } else { # Defensive bias for ctry_b
+                if (runif(1) < stats_b$dsp && runif(1) < stats_b$dgs) {
+                    goals_b = goals_b + 1
+                }
+            }
+            posession = "b"
+        } else {
+            if (bias == "offensive") { # Offensive bias for ctry_b
+                if (runif(1) < stats_b$osp && runif(1) < stats_b$ogs) {
+                    goals_b = goals_b + 1
+                }
+            } else { # Defensive bias for ctry_a
+                if (runif(1) < stats_a$dsp && runif(1) < stats_a$dgs) {
+                    goals_a = goals_a + 1
+                }
+            }
+            posession = "a"
+        }
+    }
+    return(c(goals_a, goals_b))
 }
 
 ```
