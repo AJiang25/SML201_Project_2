@@ -309,7 +309,27 @@ Before the models can be built, you will need to prepare some of the data to all
 ![](https://www.dropbox.com/scl/fi/1xqlflad3sjt6e9e5onw0/pitch_grid.png?rlkey=sks3ffdb9e4aoov962e7brsb3&st=gtvoed7f&raw=1){fig-align="center" width="85%"}
 
 ```{r b1}
+#remove penalty
+wc_shots = wc_shots %>% 
+  filter(situation != 'penalty')
 
+#dummy vars
+wc_shots = wc_shots %>% 
+  mutate(pos_d = ifelse(pos == 'D', 1, 0), 
+         pos_f = ifelse(pos == 'F', 1, 0),
+         pos_m = ifelse(pos == 'M', 1, 0))
+
+# d
+wc_shots = wc_shots %>% 
+  mutate(d = sqrt(x^2 + y^2))
+
+# theta
+wc_shots = wc_shots %>% 
+  mutate(
+    theta = abs(atan2(x, y)) * (180/pi)
+  )
+
+wc_shots
 
 ```
 
