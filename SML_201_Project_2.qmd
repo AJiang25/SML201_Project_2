@@ -342,6 +342,18 @@ Generate R^2^ for this model. Explain the meaning of this R^2^ value in the summ
 Generate the `corrplot` for all pairs of variables in this model. Explain the takeaways from this plot in the summary section.
 
 ```{r b2}
+# linear regression model
+model1 = lm(xg ~ d + theta, wc_shots)
+
+# R^2 value
+R2 = summary(model1)$r.squared
+R2
+
+# 9 numerical vars - need to add shot_time but it's not in the data table for some reason...
+wc_corr = wc_shots %>% 
+  select(pos_d, pos_f, pos_m, xg, x, y, d, theta)
+wc_corr = cor(wc_corr)
+corrplot(wc_corr, method = 'circle', type = 'upper')
 
 
 
