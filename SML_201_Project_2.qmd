@@ -597,8 +597,8 @@ game_model = function(a, b) {
     posession = "a"
 
     while (total_time < 90 * 60) { # 90 minutes
-        # ASK ABOUT THIS LINE
-        posession_time = max(5, rnorm(1, mean = 45, sd = 13)) # bare min time of 5
+        # bare min time of 5 seconds
+        posession_time = max(5, rnorm(1, mean = 45 * 60, sd = 13 * 60)) 
 
         # Check if the first half ends
         if (total_time < 45 * 60 && total_time + possession_time > 45 * 60) {
@@ -656,8 +656,13 @@ Store all the results of the group stage matches in a data frame called `wc_grps
 Do not display this data frame. Simply store it in `wc_grpstage` to use for the next task.
 
 ```{r c2}
-
-
+wc_grpstage = wc_sched %>%
+    mutate(
+        gls = map2(ctry_a, ctry_b, ~ game_mode(.x, .y)),
+        gls_a = map_int(gls, 1),
+        gls_b = map_int(gls, 2)
+    ) %>%
+    select(match, group, ctry_1, ctry_b, gls_a, gls_b)
 ```
 
 #### C3. Group Stage Standings \[*6 pts*\]
