@@ -366,7 +366,19 @@ Create a linear regression model (`model2`) of expected goal as an exponential f
 Is `model1` or `model2` better for predicting `xg`? Provide your reasons in the summary section.
 
 ```{r b3a}
+# log(xg) to make it linear, xg can't be 0
+wc_shots = wc_shots %>% 
+  mutate(
+    transform_xg = ifelse(xg != 0, log(xg), log(1))
+  )
 
+# linear regression model
+model2 = lm(transform_xg ~ d + theta, wc_shots)
+model2
+
+# R^2 value - greater than 0.5
+R2 = summary(model2)$r.squared
+R2
 
 ```
 
@@ -375,6 +387,22 @@ Generate a scatter plot of `xg` vs `d`. Overlay that with the regression line of
 You can use either `highcharter` or `ggplot2`.
 
 ```{r b3b}
+#regression data (turn it back to nonlinear)
+wc_shots = wc_shots %>% 
+  mutate(regression_data = exp(predict(model2)))
+
+
+hchart(
+  object = wc_shots,
+  mapping = hcaes(x = d, y = xg),
+  type = 'scatter'
+) |> 
+  hc_plotOptions(scatter = list(marker = list(radius = 2))) %>% 
+  hc_title(text = "xg vs d Scatter Plot") %>% 
+  hc_xAxis(title = list(text = "Euclidean distance (d)")) %>% 
+  hc_yAxis(title = list(text = "Expected Goal Probability (xg)")) %>% 
+  hc_add_series(wc_shots, hcaes(x = d, y = regression_data), type = 'line')
+
 
 
 ```
