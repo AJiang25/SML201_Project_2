@@ -594,11 +594,11 @@ game_model = function(a, b) {
     total_time = 0
     goals_a = 0
     goals_b = 0
-    posession = "a"
+    possession = "a"
 
     while (total_time < 90 * 60) { # 90 minutes
         # bare min time of 5 seconds
-        posession_time = max(5, rnorm(1, mean = 45 * 60, sd = 13 * 60)) 
+        possession_time = max(5, rnorm(1, mean = 45 * 60, sd = 13 * 60)) 
 
         # Check if the first half ends
         if (total_time < 45 * 60 && total_time + possession_time > 45 * 60) {
@@ -607,11 +607,11 @@ game_model = function(a, b) {
             next
         }
 
-        total_time = total_time + posession_time 
+        total_time = total_time + possession_time 
         bias = sample(c("offensive", "defensive"), 1)
 
         # Scoring Mechanics
-        if (posession == "a") {
+        if (possession == "a") {
             if (bias == "offensive") { # Offensive bias for ctry_a
                 if (runif(1) < stats_a$osp && runif(1) < stats_a$ogs) {
                     goals_a = goals_a + 1
@@ -621,7 +621,7 @@ game_model = function(a, b) {
                     goals_b = goals_b + 1
                 }
             }
-            posession = "b"
+            possession = "b"
         } else {
             if (bias == "offensive") { # Offensive bias for ctry_b
                 if (runif(1) < stats_b$osp && runif(1) < stats_b$ogs) {
@@ -632,7 +632,7 @@ game_model = function(a, b) {
                     goals_a = goals_a + 1
                 }
             }
-            posession = "a"
+            possession = "a"
         }
     }
     return(c(goals_a, goals_b))
@@ -658,11 +658,11 @@ Do not display this data frame. Simply store it in `wc_grpstage` to use for the 
 ```{r c2}
 wc_grpstage = wc_sched %>%
     mutate(
-        gls = map2(ctry_a, ctry_b, ~ game_mode(.x, .y)),
+        gls = map2(ctry_a, ctry_b, ~ game_model(.x, .y)),
         gls_a = map_int(gls, 1),
         gls_b = map_int(gls, 2)
     ) %>%
-    select(match, group, ctry_1, ctry_b, gls_a, gls_b)
+    select(match, group, ctry_a, ctry_b, gls_a, gls_b)
 ```
 
 #### C3. Group Stage Standings \[*6 pts*\]
