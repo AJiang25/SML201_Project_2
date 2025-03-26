@@ -32,7 +32,7 @@ Fill the value `our_seed` with a calculated seed to precede all random sampling 
 ```{r our_seed}
 # calculate the seed to be the sum of the PUIDs of each teammate and then the remainder after dividing by 1746.
 # for example, if you have two teammates with PUIDs 888888888 & 999999999,
-our_seed = sum(920327399, 999999999, 920400588) %% 1746
+our_seed = sum(920327399, 920400588) %% 1746
 ```
 
 ------------------------------------------------------------------------
@@ -189,16 +189,135 @@ Assume that you are already at the location of the first group stage match of yo
 
 ```{r a1a}
 itinerary = function(ctry, pdt, conn) {
-  #3 group matches for the country
-  matches = wc_sched %>% 
-    filter(ctry_a == ctry | ctry_b == ctry) %>% 
-    arrange(match_dt) %>% 
-    slice(1:3)
-  
-  #nearest airports to each of the venues where the matches will be played
+    # Filter for the matches in given ctry and arrange by date
+    country_matches <- wc_sched %>%
+        filter(ctry_a == ctry | ctry_b == ctry) %>%
+        arrange(match_dt)
+
+    print(country_matches)
+    
+    # Empty itinerary data frame
+    itinerary_df <- data.frame()
+    
+    # iterate through the matches, skipping the first match
+    for (i in 1:(nrow(country_matches) - 1)) {
+        dep_match <- country_matches[i, ] 
+        arr_match <- country_matches[i + 1, ]
+        dep_airport <- get_airport(dep_match$lat, dep_match$lng)
+        arr_airport <- get_airport(arr_match$lat, arr_match$lng)
+        
+        if (dep_airport == arr_airport) {
+          next
+        }
+         
+        # Find best flight route based on connections
+        best_route <- find_connecting_flights(dep_airport, arr_airport, pdt[i], conn[i])
+        print(best_route)
+        
+        # Calculate the departure and arrival dates
+        dep_date <- as.Date(dep_match$match_dt)  
+        arr_date <- as.Date(dep_match$match_dt)  
+        
+        # Adjust the arrival date if the flight arrives after midnight
+        if (best_route$arr_time[1] < best_route$dep_time[1]) {
+            arr_date <- arr_date + 1
+        }
+
+            
+        # Create itinerary for this leg and append it
+        leg_df <- data.frame(
+            flt = paste0(i, i+1),
+            leg = i,
+            dep = dep_airport,
+            arr = arr_airport,
+            dod = as.character(dep_date),
+            tod = best_route$dep_time[1],
+            doa = as.character(arr_date),
+            toa = best_route$arr_time[1],
+            distance = best_route$total_distance[1]
+        )
+        itinerary_df <- rbind(itinerary_df, leg_df)
+    }
+    return(itinerary_df)
 }
 
 
+# Helper function to get the nearest airport to a venue
+get_airport = function(venue_lat, venue_lng) {
+    closest_idx <- which.min(
+       dist_mi(
+         venue_lat,
+         venue_lng,
+         wc_airports$lat,
+         wc_airports$lng
+      )
+    )
+    return(wc_airports$code[closest_idx])
+}
+
+# Helper function to get flights based on pdt_seq
+get_flights = function(dep_airport, arr_airport, pdt_seg) {
+    flights <- wc_flights %>%
+        filter(orig == dep_airport & dest == arr_airport)
+    
+    if (pdt_seg == 1) {
+        flights <- flights %>% filter(dep >= 0 & dep <= 759)
+    } else if (pdt_seg == 2) {
+        flights <- flights %>% filter(dep >= 800 & dep <= 1559)
+    } else {
+        flights <- flights %>% filter(dep >= 1600 & dep <= 2359)
+    }
+    return(flights)
+}
+
+# Helper function to find connecting flights
+find_connecting_flights = function(dep_airport, arr_airport, pdt_seg, num_connections) {
+    if (num_connections == 0) {
+        return(get_flights(dep_airport, arr_airport, pdt_seg))
+    }
+    
+    all_routes <- data.frame()
+    intermediate_airports <- unique(wc_flights$orig)
+    
+    for (int_airport in intermediate_airports) {
+        if (int_airport != dep_airport && int_airport != arr_airport) {
+            # Get first leg flights
+            first_leg <- get_flights(dep_airport, int_airport, pdt_seg)
+            
+            if (nrow(first_leg) > 0) {
+                for (j in seq_len(nrow(first_leg))) {  
+                    second_leg <- wc_flights %>%
+                        filter(
+                            orig == int_airport,
+                            dest == arr_airport,
+                            dep >= first_leg$arr[j] + 100
+                        )
+                    
+                    if (nrow(second_leg) > 0) {
+                        for (k in seq_len(nrow(second_leg))) {
+                            route <- data.frame(
+                                dep = first_leg$orig[j],
+                                arr = second_leg$dest[k],
+                                dep_time = first_leg$dep[j],
+                                arr_time = second_leg$arr[k],
+                                total_distance = dist_mi(
+                                    wc_airports$lat[wc_airports$code == dep_airport],
+                                    wc_airports$lng[wc_airports$code == dep_airport],
+                                    wc_airports$lat[wc_airports$code == arr_airport],
+                                    wc_airports$lng[wc_airports$code == arr_airport]
+                                )
+                            )
+                            all_routes <- bind_rows(all_routes, route)
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    # Sort by total distance and return best option
+    return(all_routes %>% arrange(total_distance) %>% slice(1))
+}
 ```
 
 Create an actual itinerary using the function with the following conditions:
@@ -211,7 +330,8 @@ Create an actual itinerary using the function with the following conditions:
 Display your itinerary using `gt`. Stylize the table to look neat and organized.
 
 ```{r a1b}
-our_itinerary = itinerary()
+our_itinerary = itinerary(ctry = our_country, pdt = c(1, 3), conn = c(0, 2))
+our_itinerary
 
 
 ```
@@ -309,25 +429,21 @@ Before the models can be built, you will need to prepare some of the data to all
 ![](https://www.dropbox.com/scl/fi/1xqlflad3sjt6e9e5onw0/pitch_grid.png?rlkey=sks3ffdb9e4aoov962e7brsb3&st=gtvoed7f&raw=1){fig-align="center" width="85%"}
 
 ```{r b1}
-#remove penalty
+#remove penalty & add dummy variables
 wc_shots = wc_shots %>% 
-  filter(situation != 'penalty')
+    filter(situation != 'penalty') %>%
+    mutate(
+        pos_d = ifelse(pos == 'D', 1, 0), 
+        pos_f = ifelse(pos == 'F', 1, 0),
+        pos_m = ifelse(pos == 'M', 1, 0)
+    )
 
-#dummy vars
+# d & theta
 wc_shots = wc_shots %>% 
-  mutate(pos_d = ifelse(pos == 'D', 1, 0), 
-         pos_f = ifelse(pos == 'F', 1, 0),
-         pos_m = ifelse(pos == 'M', 1, 0))
-
-# d
-wc_shots = wc_shots %>% 
-  mutate(d = sqrt(x^2 + y^2))
-
-# theta
-wc_shots = wc_shots %>% 
-  mutate(
-    theta = abs(atan2(x, y)) * (180/pi)
-  )
+    mutate(
+        d = sqrt(x^2 + y^2),
+        theta = abs(atan2(x, y)) * (180/pi)
+    )
 
 wc_shots
 
@@ -344,18 +460,18 @@ Generate the `corrplot` for all pairs of variables in this model. Explain the ta
 ```{r b2}
 # linear regression model
 model1 = lm(xg ~ d + theta, wc_shots)
+model1
 
 # R^2 value
 R2 = summary(model1)$r.squared
 R2
 
 # 9 numerical vars - need to add shot_time but it's not in the data table for some reason...
+wc_shots
 wc_corr = wc_shots %>% 
-  select(pos_d, pos_f, pos_m, xg, x, y, d, theta)
-wc_corr = cor(wc_corr)
+    select(pos_d, pos_f, pos_m, xg, x, y, d, theta, shot_time) %>%
+    cor()
 corrplot(wc_corr, method = 'circle', type = 'upper')
-
-
 
 ```
 
@@ -402,16 +518,13 @@ hchart(
   hc_xAxis(title = list(text = "Euclidean distance (d)")) %>% 
   hc_yAxis(title = list(text = "Expected Goal Probability (xg)")) %>% 
   hc_add_series(wc_shots, hcaes(x = d, y = regression_data), type = 'line')
-
-
-
 ```
 
 #### B4. Summary \[*3 pts*\]
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> Summary
+> Based on the analysis of the World Cup data from 2022, both models were used to predict the expected goals. The first model was a linear regression model that used distance and angle as predictors. We obtained an R^2 value of 0.3171156, which means that (~31.7%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). Therefore showing that model1 was not as effective in predicting the expected goals (xg). The corrplot graph shows a high negative correlation between pos_m (midfield) and pos_f (forward), a somewhat negative correlation between xg and d (distance), and a high positive correlation between d and y. The rest of the variables seemed to have a low negative/positive correlation betwen each other. The results make sense as a a midfielder tends to not be a forward player, as distance increases, the expected goal decreases, and as players move up the field (y), their total distance also increase. The exponential model 2 demonstrated that it was a better predictor of xg because it had an R^2 value of 0.5677117, which means that (~56.8%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). Therefore, the results indicate that there is a non-linear relationship between the distance/angle predictors and the expected goals. The results that we obtained earlier are confirmed in the scatter plot as we see an exponential decay in the expected goal probability as distance increases. This makes sense as shots taken closer to the goal have exponentially better chances for scores.
 
 ------------------------------------------------------------------------
 
