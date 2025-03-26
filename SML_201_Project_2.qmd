@@ -504,33 +504,29 @@ You can use either `highcharter` or `ggplot2`.
 
 ```{r b3b}
 #regression data (turn it back to nonlinear)
-# wc_shots = wc_shots %>% 
-#   mutate(regression_data = exp(predict(model2)))
+wc_sample = wc_shots |> 
+  slice_sample(n = 200) |> 
+  arrange(d) |> 
+  mutate(regression_data= round(
+    exp(model2$coefficients[1] + 
+        model2$coefficients[2] * d), 5))
 
-
-# hchart(
-#   object = wc_shots,
-#   mapping = hcaes(x = d, y = xg),
-#   type = 'scatter'
-# ) |> 
-#   hc_plotOptions(scatter = list(marker = list(radius = 2))) %>% 
-#   hc_title(text = "xg vs d Scatter Plot") %>% 
-#   hc_xAxis(title = list(text = "Euclidean distance (d)")) %>% 
-#   hc_yAxis(title = list(text = "Expected Goal Probability (xg)")) %>% 
-#   hc_add_series(wc_shots, hcaes(x = d, y = regression_data), type = 'line')
-
-wc_shots <- wc_shots %>%
-  mutate(regression_data = exp(predict(model2)))
-
-ggplot(wc_shots, aes(x = d, y = xg)) +
-  geom_point(alpha = 2) +
-  geom_line(aes(y = regression_data), color = "blue", size = 1) +
-  labs(
-    title = "Expected Goals vs Distance",
-    x = "Distance from Goal (yards)",
-    y = "Expected Goals (xG)"
-  ) +
-  theme_minimal()
+hchart(
+  object = wc_shots,
+  mapping = hcaes(x = d, y = xg),
+  type = 'scatter'
+) %>%
+  hc_plotOptions(scatter = list(marker = list(radius = 2))) %>% 
+  hc_title(text = "xg vs d Scatter Plot") %>% 
+  hc_xAxis(title = list(text = "Euclidean distance (d)")) %>% 
+  hc_yAxis(title = list(text = "Expected Goal Probability (xg)")) %>% 
+  hc_add_series(
+    wc_sample,
+    hcaes(
+        x = d,
+        y = regression_data),
+        type = 'line'
+    )
 
 ```
 
@@ -598,7 +594,7 @@ game_model = function(a, b) {
 
     while (total_time < 90 * 60) { # 90 minutes
         # bare min time of 5 seconds
-        possession_time = max(5, rnorm(1, mean = 45, sd = 13)) 
+        possession_time = max(5, round(rnorm(1, mean = 45, sd = 13))) 
 
         # Check if the first half ends
         if (total_time < 45 * 60 && total_time + possession_time > 45 * 60) {
