@@ -598,12 +598,12 @@ game_model = function(a, b) {
 
     while (total_time < 90 * 60) { # 90 minutes
         # bare min time of 5 seconds
-        possession_time = max(5, rnorm(1, mean = 45 * 60, sd = 13 * 60)) 
+        possession_time = max(5, rnorm(1, mean = 45, sd = 13)) 
 
         # Check if the first half ends
         if (total_time < 45 * 60 && total_time + possession_time > 45 * 60) {
-            possession = "b" # Switch possession to country b at the start of the second half
-            total_time = 45 * 60 # End the first half
+            possession = "b" 
+            total_time = 45 * 60
             next
         }
 
@@ -663,6 +663,8 @@ wc_grpstage = wc_sched %>%
         gls_b = map_int(gls, 2)
     ) %>%
     select(match, group, ctry_a, ctry_b, gls_a, gls_b)
+
+wc_grpstage
 ```
 
 #### C3. Group Stage Standings \[*6 pts*\]
