@@ -744,9 +744,20 @@ Use as many code chunks as you see fit. In general, four should be sufficient an
 No summary for this section is necessary.
 
 ```{r d1}
+top_two_countries = wc_matches %>%
+    group_by(group) %>%
+    slice_max(order_by = Pts, n = 2, with_ties = FALSE)
 
+top_3rd_countries = wc_matches %>%
+    group_by(group) %>%
+    slice_max(order_by = Pts, n = 3, with_ties = FALSE) %>%
+    slice_tail(n = 1) %>%
+    ungroup() %>%
+    arrange(desc(Pts), desc(GF - GA), desc(GF)) %>%
+    slice_head(n = 8)
 
-
+knockout_countries = bind_rows(top_two_countries, top_3rd_countries) %>%
+    arrange(group, desc(Pts), desc(GF - GA), desc(GF))
 ```
 
 ```{r d2}
