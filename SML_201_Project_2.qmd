@@ -685,6 +685,37 @@ The table must be arranged as follows:
     -   If still tied in GF, then sort by the Pts earned in the matches played among the tied countries (hi to lo).
 
 ```{r c3}
+wc_matches = wc_grpstage |>
+    mutate(
+        winner = case_when(
+            gls_a > gls_b ~ ctry_a,
+            gls_b > gls_a ~ ctry_b,
+            TRUE ~ "Draw"
+        )
+    ) |>
+    pivot_longer(cols = c(ctry_a, ctry_b), names_to = "role", values_to = "country") |>
+    group_by(group, country) |>
+    summarize(
+        w = sum(winner == country),  
+        l = sum((winner != "Draw") & (winner != country)), 
+        d = sum(winner == "Draw"), 
+        GF = sum(ifelse(role == "ctry_a", gls_a, gls_b)),
+        GA = sum(ifelse(role == "ctry_a", gls_b, gls_a)),
+        Pts = 3 * w + d 
+    ) |>
+    arrange(group, desc(Pts), desc(GF - GA), desc(GF))
+
+wc_matches |> gt() |>
+    tab_header(title = "Group Stage Standings") |>
+    cols_label(
+        country = "Country",
+        w = "Wins",
+        l = "Losses",
+        d = "Draws",
+        GF = "Goals For",
+        GA = "Goals Allowed",
+        Pts = "Points"
+    )
 
 
 ```
