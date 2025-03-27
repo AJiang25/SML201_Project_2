@@ -938,25 +938,33 @@ round_of_32 = function(knockout_countries) {
     return(winners)
 }
 
+
+winners_32 = round_of_32(knockout_countries)
 matchups_16 = list(
-        c(winners[1], winners[2]), c(winners[3], winners[4]),
-        c(winners[5], winners[6]), c(winners[7], winners[8]),
-        c(winners[9], winners[10]), c(winners[11], winners[12]),
-        c(winners[13], winners[14]), c(winners[15], winners[16])
-    )
+        c(winners_32[1], winners_32[2]), c(winners_32[3], winners_32[4]),
+        c(winners_32[5], winners_32[6]), c(winners_32[7], winners_32[8]),
+        c(winners_32[9], winners_32[10]), c(winners_32[11], winners_32[12]),
+        c(winners_32[13], winners_32[14]), c(winners_32[15], winners_32[16])
+    );
 
+winners_16 = run_round(winners, matchups_16)
 matchups_qf = list(
-        c(winners[1], winners[2]), c(winners[3], winners[4]),
-        c(winners[5], winners[6]), c(winners[7], winners[8])
-    )
+        c(winners_16[1], winners_16[2]), c(winners_16[3], winners_16[4]),
+        c(winners_16[5], winners_16[6]), c(winners_16[7], winners_16[8])
+    );
 
+winners_qf = run_round(winners_16, matchups_qf)
 matchups_sf = list(
-        c(winners[1], winners[2]), c(winners[3], winners[4])
-    )
+        c(winners_qf[1], winners_qf[2]), c(winners_qf[3], winners_qf[4])
+    );
 
+winners_sf = run_round(winners_qf, matchups_sf)
 matchups_f = list(
-        c(winners[1], winners[2])
-    )
+        c(winners_sf[1], winners_sf[2])
+    );
+
+winners = run_round(winners_sf, matchups_f)
+winners
 
 run_round = function(winners, matchups) {
     winners = c()
@@ -973,17 +981,6 @@ run_round = function(winners, matchups) {
     return(winners)
 }
 
-winners_32 = round_of_32(knockout_countries)
-winners_16 = run_round(winners_32, matchups_16)
-winners_qf = run_round(winners_16, matchups_qf)
-winners_sf = run_round(winners_qf, matchups_sf)
-winners = run_round(winners_sf, matchups_f)
-
-winners_32
-winners_16
-winners_qf
-winners_sf
-winners
 ```
 
 ```{r d4}
@@ -1042,6 +1039,9 @@ hchart(
 
 
 ```
+```{r test}
+```
+
 
 ------------------------------------------------------------------------
 
