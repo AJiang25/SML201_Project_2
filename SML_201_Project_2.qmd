@@ -534,7 +534,7 @@ hchart(
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> The first model was a linear regression model that used distance and angle as predictors. We obtained an R^2 value of 0.3171156, which means that (~31.7%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). This means that model1 likely was not as effective in predicting the expected goals (xg). The corrplot graph shows a high negative correlation between pos_m (midfield) and pos_f (forward), a somewhat negative correlation between xg and d (distance), and a high positive correlation between d and y. The rest of the variables seemed to have a low negative/positive correlation betwen each other. The results make sense as a midfielder tends to not be a forward player and as distance increases, the expected goal decreases. The correlation bewteen xg and d is stronger than with theta because distance directly impacts the probability of making a goal whereas the angle relative to the goal has less of an impact.It's also likely that there is a high correlation between d and y and not with the x-coordinate because the goal is centered at (0,0) and the y-coordinate represents the vertical distance from the goal which would have a higher impact than the x-coordinate (horizontal distance). The exponential model 2 demonstrated that it was a better predictor of xg because it had an R^2 value of 0.5677117, which means that (~56.8%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). Therefore, the results indicate that there is a non-linear relationship between the distance/angle predictors and the expected goals. The results that we obtained earlier are confirmed in the scatter plot as we see an exponential decay in the expected goal probability as distance increases. This makes sense as shots taken closer to the goal have exponentially better chances for scores.
+> The first model was a linear regression model that used distance and angle as predictors. We obtained an R\^2 value of 0.3171156, which means that (\~31.7%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). This means that model1 likely was not as effective in predicting the expected goals (xg). The corrplot graph shows a high negative correlation between pos_m (midfield) and pos_f (forward), a somewhat negative correlation between xg and d (distance), and a high positive correlation between d and y. The rest of the variables seemed to have a low negative/positive correlation betwen each other. The results make sense as a midfielder tends to not be a forward player and as distance increases, the expected goal decreases. The correlation bewteen xg and d is stronger than with theta because distance directly impacts the probability of making a goal whereas the angle relative to the goal has less of an impact.It's also likely that there is a high correlation between d and y and not with the x-coordinate because the goal is centered at (0,0) and the y-coordinate represents the vertical distance from the goal which would have a higher impact than the x-coordinate (horizontal distance). The exponential model 2 demonstrated that it was a better predictor of xg because it had an R\^2 value of 0.5677117, which means that (\~56.8%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). Therefore, the results indicate that there is a non-linear relationship between the distance/angle predictors and the expected goals. The results that we obtained earlier are confirmed in the scatter plot as we see an exponential decay in the expected goal probability as distance increases. This makes sense as shots taken closer to the goal have exponentially better chances for scores.
 
 ------------------------------------------------------------------------
 
@@ -722,7 +722,7 @@ wc_matches |> gt() |>
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> In Part C, we simulated the group stage matches of the World Cup using the probabilistic model outlined in part C1. The results provided insights into how the offensive and defensive statistics can influence which country wins in a game. The game showed that countries with a good balance between offensive and defensive plays as well as higher statistics tended to fair better in their matches by either winning or tieing their games and vice versa. 
+> In Part C, we simulated the group stage matches of the World Cup using the probabilistic model outlined in part C1. The results provided insights into how the offensive and defensive statistics can influence which country wins in a game. The game showed that countries with a good balance between offensive and defensive plays as well as higher statistics tended to fair better in their matches by either winning or tieing their games and vice versa.
 
 ------------------------------------------------------------------------
 
@@ -755,7 +755,11 @@ top_3rd_countries = wc_matches %>%
     slice_head(n = 8)
 
 knockout_countries = bind_rows(top_two_countries, top_3rd_countries) %>%
-    arrange(group, desc(Pts), desc(GF - GA), desc(GF))
+    arrange(group, desc(Pts), desc(GF - GA), desc(GF)) %>%
+    group_by(group) %>%
+    mutate(rank = row_number(desc(Pts))) # Add a new column called rank
+
+print(n = 32, knockout_countries)
 ```
 
 ```{r d2}
@@ -900,10 +904,142 @@ game_model = function(a, b) {
 ```
 
 ```{r d3}
+round_of_32 = function(knockout_countries) {
+    matchups = list(
+        c("A2", "B2"), c("E1", "3"), c("F1", "C2"), c("C1", "F2"),
+        c("I1", "3"), c("E2", "I2"), c("A1", "3"), c("L1", "3"),
+        c("D1",  "3"), c("G1", "3"), c("K2", "L2"), c("H1", "J2"),
+        c("B1", "3"), c("J1", "H2"), c("K1", "3"), c("D2", "G2")
+    ) # matchups according to the wikipedia page
+    winners = c()
+
+    for (match in matchups) {
+        team_a = knockout_countries$country[
+            knockout_countries$group == substr(match[1], 1, 1) & # Get the group
+            knockout_countries$rank == as.numeric(substr(match[1], 2, 2)) # Get the rank
+            ] 
+        if (match[2] == "3") {
+            team_b = sample(knockout_countries$country[
+                knockout_countries$rank == 3
+            ], 1) # Randomly samples 1 3rd place team
+        } else {
+            team_b = knockout_countries$country[
+                knockout_countries$group == substr(match[1], 1, 1) & # Get the group
+                knockout_countries$rank == as.numeric(substr(match[1], 2, 2)) # Get the rank
+            ]
+        }
+        result = game_model(team_a, team_b) 
+        if (result[1] > result[2]) {
+            winners = c(winners, team_a)
+        } else {
+            winners = c(winners, team_b)
+        }
+    }
+    return(winners)
+}
+
+matchups_16 = list(
+        c(winners[1], winners[2]), c(winners[3], winners[4]),
+        c(winners[5], winners[6]), c(winners[7], winners[8]),
+        c(winners[9], winners[10]), c(winners[11], winners[12]),
+        c(winners[13], winners[14]), c(winners[15], winners[16])
+    )
+
+matchups_qf = list(
+        c(winners[1], winners[2]), c(winners[3], winners[4]),
+        c(winners[5], winners[6]), c(winners[7], winners[8])
+    )
+
+matchups_sf = list(
+        c(winners[1], winners[2]), c(winners[3], winners[4])
+    )
+
+matchups_f = list(
+        c(winners[1], winners[2])
+    )
+
+run_round = function(winners, matchups) {
+    winners = c()
+    for (match in matchups) {
+        team_a = match[1]
+        team_b = match[2]
+        result = game_model(team_a, team_b)
+        if (result[1] > result[2]) {
+            winners = c(winners, team_a)
+        } else {
+            winners = c(winners, team_b)
+        }
+    }
+    return(winners)
+}
+
+winners_32 = round_of_32(knockout_countries)
+winners_16 = run_round(winners_32, matchups_16)
+winners_qf = run_round(winners_16, matchups_qf)
+winners_sf = run_round(winners_qf, matchups_sf)
+winners = run_round(winners_sf, matchups_f)
+
+winners_32
+winners_16
+winners_qf
+winners_sf
+winners
 ```
 
 ```{r d4}
-# Visualize the knockout stage results in a bracket-like format.
+# Prepare the data
+data <- data.frame(
+    Round = c(
+        rep(0, nrow(knockout_countries)),
+        rep(1, length(winners_32)),
+        rep(2, length(winners_16)),
+        rep(3, length(winners_qf)),
+        rep(4, length(winners_sf)),
+        5
+    ),
+    Winner = c(
+        knockout_countries$country,
+        winners_32,
+        winners_16,
+        winners_qf,
+        winners_sf,
+        winners)
+    ) %>%
+    group_by(Winner) %>%
+    mutate(TeamID = cur_group_id())
+
+# Visualize the data
+hchart(
+    data,
+    "line",
+    hcaes(x = Round, y = TeamID, group = Winner)
+) %>%
+    hc_title(text = "2026 WC Bracket Prediction") %>%
+    hc_xAxis(title = list(text = "Round")) %>%
+    hc_yAxis(title = list(text = "Teams")) %>%
+    hc_tooltip(pointFormat = "Team: {point.Winner}") %>%
+    hc_plotOptions(
+        line = list(
+            marker = list(
+                enabled = TRUE,
+                symbol = "circle"
+            )
+        ),
+        series = list(showInLegend = FALSE)
+    ) %>%
+    hc_annotations(
+        list(
+            labels = list(
+                list(
+                    point = list(x = 5, y = data$TeamID[data$Round == 5]),
+                    text = paste("World Cup Champion:", winners)
+                )
+            ) # Only find the data point at round 5
+        )
+    )
+
+
+
 
 ```
 
