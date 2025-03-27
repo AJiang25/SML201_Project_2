@@ -534,7 +534,7 @@ hchart(
 
 Write a concluding paragraph on your observations during the completion of this section. Contain all your words within the blockquote below by replacing the word 'Summary' with your text.
 
-> Based on the analysis of the World Cup data from 2022, both models were used to predict the expected goals. The first model was a linear regression model that used distance and angle as predictors. We obtained an R^2 value of 0.3171156, which means that (~31.7%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). Therefore showing that model1 was not as effective in predicting the expected goals (xg). The corrplot graph shows a high negative correlation between pos_m (midfield) and pos_f (forward), a somewhat negative correlation between xg and d (distance), and a high positive correlation between d and y. The rest of the variables seemed to have a low negative/positive correlation betwen each other. The results make sense as a a midfielder tends to not be a forward player, as distance increases, the expected goal decreases, and as players move up the field (y), their total distance also increase. The exponential model 2 demonstrated that it was a better predictor of xg because it had an R^2 value of 0.5677117, which means that (~56.8%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). Therefore, the results indicate that there is a non-linear relationship between the distance/angle predictors and the expected goals. The results that we obtained earlier are confirmed in the scatter plot as we see an exponential decay in the expected goal probability as distance increases. This makes sense as shots taken closer to the goal have exponentially better chances for scores.
+> The first model was a linear regression model that used distance and angle as predictors. We obtained an R^2 value of 0.3171156, which means that (~31.7%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). This means that model1 likely was not as effective in predicting the expected goals (xg). The corrplot graph shows a high negative correlation between pos_m (midfield) and pos_f (forward), a somewhat negative correlation between xg and d (distance), and a high positive correlation between d and y. The rest of the variables seemed to have a low negative/positive correlation betwen each other. The results make sense as a midfielder tends to not be a forward player and as distance increases, the expected goal decreases. The correlation bewteen xg and d is stronger than with theta because distance directly impacts the probability of making a goal whereas the angle relative to the goal has less of an impact.It's also likely that there is a high correlation between d and y and not with the x-coordinate because the goal is centered at (0,0) and the y-coordinate represents the vertical distance from the goal which would have a higher impact than the x-coordinate (horizontal distance). The exponential model 2 demonstrated that it was a better predictor of xg because it had an R^2 value of 0.5677117, which means that (~56.8%) of the variability of the expected goals is explained by the model (between the distance and angle predictors). Therefore, the results indicate that there is a non-linear relationship between the distance/angle predictors and the expected goals. The results that we obtained earlier are confirmed in the scatter plot as we see an exponential decay in the expected goal probability as distance increases. This makes sense as shots taken closer to the goal have exponentially better chances for scores.
 
 ------------------------------------------------------------------------
 
@@ -659,8 +659,6 @@ wc_grpstage = wc_sched %>%
         gls_b = map_int(gls, 2)
     ) %>%
     select(match, group, ctry_a, ctry_b, gls_a, gls_b)
-
-wc_grpstage
 ```
 
 #### C3. Group Stage Standings \[*6 pts*\]
@@ -761,20 +759,151 @@ knockout_countries = bind_rows(top_two_countries, top_3rd_countries) %>%
 ```
 
 ```{r d2}
+game_model = function(a, b) {
+    stats_a = wc_countries %>%
+        filter(country == a)
+    stats_b = wc_countries %>%
+        filter(country == b)
+    
+    total_time = 0
+    goals_a = 0
+    goals_b = 0
+    possession = "a"
 
+    while (total_time < 90 * 60) { # 90 minutes
+        # bare min time of 5 seconds
+        possession_time = max(5, round(rnorm(1, mean = 45, sd = 13))) 
 
+        # Check if the first half ends
+        if (total_time < 45 * 60 && total_time + possession_time > 45 * 60) {
+            possession = "b" 
+            total_time = 45 * 60
+            next
+        }
+
+        total_time = total_time + possession_time 
+        bias = sample(c("offensive", "defensive"), 1)
+
+        # Scoring Mechanics
+        if (possession == "a") {
+            if (bias == "offensive") { # Offensive bias for ctry_a
+                if (runif(1) < stats_a$osp && runif(1) < stats_a$ogs) {
+                    goals_a = goals_a + 1
+                }
+            } else { # Defensive bias for ctry_b
+                if (runif(1) < stats_b$dsp && runif(1) < stats_b$dgs) {
+                    goals_b = goals_b + 1
+                }
+            }
+            possession = "b"
+        } else {
+            if (bias == "offensive") { # Offensive bias for ctry_b
+                if (runif(1) < stats_b$osp && runif(1) < stats_b$ogs) {
+                    goals_b = goals_b + 1
+                }
+            } else { # Defensive bias for ctry_a
+                if (runif(1) < stats_a$dsp && runif(1) < stats_a$dgs) {
+                    goals_a = goals_a + 1
+                }
+            }
+            possession = "a"
+        }
+    }
+    
+    # new code starts here: extra time
+    if (goals_a == goals_b) {
+      extra_time = 0
+      while (extra_time < 30 *60) {
+        # bare min time of 5 seconds
+        possession_time = max(5, round(rnorm(1, mean = 45, sd = 13))) 
+        
+        #check if extra time ends
+        if (extra_time < 30 * 60 && extra_time + possession_time > 30 * 60) {
+          extra_time = 30 * 60
+          next
+        }
+        
+        extra_time = extra_time + possession_time
+        bias = sample(c("offensive", "defensive"), 1)
+        
+        # Same scoring mechanics as before
+        if (possession == "a") {
+            if (bias == "offensive") { # Offensive bias for ctry_a
+                if (runif(1) < stats_a$osp && runif(1) < stats_a$ogs) {
+                    goals_a = goals_a + 1
+                }
+            } else { # Defensive bias for ctry_b
+                if (runif(1) < stats_b$dsp && runif(1) < stats_b$dgs) {
+                    goals_b = goals_b + 1
+                }
+            }
+            possession = "b"
+        } else {
+            if (bias == "offensive") { # Offensive bias for ctry_b
+                if (runif(1) < stats_b$osp && runif(1) < stats_b$ogs) {
+                    goals_b = goals_b + 1
+                }
+            } else { # Defensive bias for ctry_a
+                if (runif(1) < stats_a$dsp && runif(1) < stats_a$dgs) {
+                    goals_a = goals_a + 1
+                }
+            }
+            possession = "a"
+        }
+        
+      }
+      
+      # penalty kick shootout - best of 5 means first to 3 points wins (whoever kicks first gets an advantage)
+      if (goals_a == goals_b) {
+        a_penalty_points = 0
+        b_penalty_points = 0
+        
+        # team a wins coin flip, kicks first
+        if (runif(1) < 0.5) {
+          while (a_penalty_points < 3 && b_penalty_points < 3) {
+            if (runif(1) < 0.8) {
+              a_penalty_points = a_penalty_points + 1
+            }
+            if (a_penalty_points == 3) {
+              break
+            }
+            if (runif(1) < 0.8) {
+              b_penalty_points = b_penalty_points + 1
+            }
+            
+          }
+        #team b wins coin flip, kicks first
+        } else {
+          while (a_penalty_points < 3 && b_penalty_points < 3) {
+            if (runif(1) < 0.8) {
+              b_penalty_points = b_penalty_points + 1
+            }
+            if (b_penalty_points == 3) {
+              break
+            }
+            if (runif(1) < 0.8) {
+              a_penalty_points = a_penalty_points + 1
+            }
+          }
+        }
+        
+        if (a_penalty_points > b_penalty_points) {
+          goals_a = goals_a + 1
+        } else {
+          goals_b = goals_b + 1
+        }
+      }
+    }
+    return(c(goals_a, goals_b))
+}
 
 ```
 
 ```{r d3}
-
-
-
 ```
 
 ```{r d4}
-
-
+# Visualize the knockout stage results in a bracket-like format.
 
 ```
 
