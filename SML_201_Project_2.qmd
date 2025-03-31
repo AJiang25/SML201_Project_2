@@ -188,136 +188,408 @@ The flight details must be optimized for:
 Assume that you are already at the location of the first group stage match of your country.
 
 ```{r a1a}
-itinerary = function(ctry, pdt, conn) {
-    # Filter for the matches in given ctry and arrange by date
-    country_matches <- wc_sched %>%
-        filter(ctry_a == ctry | ctry_b == ctry) %>%
-        arrange(match_dt)
-
-    print(country_matches)
+# returns nearest airport given lat and lng coords
+findNearestAirport = function(given_lat, given_lng) {
+  nearest_airport <- wc_airports |>
+    mutate(dist = dist_mi(given_lat, given_lng, lat, lng)) |>
+    arrange(dist) |>
+    slice(1) |>
+    select(code, lat, lng)
     
-    # Empty itinerary data frame
-    itinerary_df <- data.frame()
-    
-    # iterate through the matches, skipping the first match
-    for (i in 1:(nrow(country_matches) - 1)) {
-        dep_match <- country_matches[i, ] 
-        arr_match <- country_matches[i + 1, ]
-        dep_airport <- get_airport(dep_match$lat, dep_match$lng)
-        arr_airport <- get_airport(arr_match$lat, arr_match$lng)
-        
-        if (dep_airport == arr_airport) {
-          next
-        }
-         
-        # Find best flight route based on connections
-        best_route <- find_connecting_flights(dep_airport, arr_airport, pdt[i], conn[i])
-        print(best_route)
-        
-        # Calculate the departure and arrival dates
-        dep_date <- as.Date(dep_match$match_dt)  
-        arr_date <- as.Date(dep_match$match_dt)  
-        
-        # Adjust the arrival date if the flight arrives after midnight
-        if (best_route$arr_time[1] < best_route$dep_time[1]) {
-            arr_date <- arr_date + 1
-        }
-
-            
-        # Create itinerary for this leg and append it
-        leg_df <- data.frame(
-            flt = paste0(i, i+1),
-            leg = i,
-            dep = dep_airport,
-            arr = arr_airport,
-            dod = as.character(dep_date),
-            tod = best_route$dep_time[1],
-            doa = as.character(arr_date),
-            toa = best_route$arr_time[1],
-            distance = best_route$total_distance[1]
-        )
-        itinerary_df <- rbind(itinerary_df, leg_df)
-    }
-    return(itinerary_df)
+  return(nearest_airport)
 }
 
-
-# Helper function to get the nearest airport to a venue
-get_airport = function(venue_lat, venue_lng) {
-    closest_idx <- which.min(
-       dist_mi(
-         venue_lat,
-         venue_lng,
-         wc_airports$lat,
-         wc_airports$lng
-      )
-    )
-    return(wc_airports$code[closest_idx])
-}
-
-# Helper function to get flights based on pdt_seq
-get_flights = function(dep_airport, arr_airport, pdt_seg) {
-    flights <- wc_flights %>%
-        filter(orig == dep_airport & dest == arr_airport)
-    
-    if (pdt_seg == 1) {
-        flights <- flights %>% filter(dep >= 0 & dep <= 759)
-    } else if (pdt_seg == 2) {
-        flights <- flights %>% filter(dep >= 800 & dep <= 1559)
+# get the range of time given pdt
+# getTimeRanges <- function(pdt) {
+#   time_ranges <- matrix(nrow = length(pdt), ncol = 2)
+#   for (i in seq_along(pdt)) {  
+#     if (pdt[i] == 1) {
+#       time_ranges[i, ] <- c(0, 759)
+#     } else if (pdt[i] == 2) {
+#       time_ranges[i, ] <- c(800, 1559)
+#     } else {
+#       time_ranges[i, ] <- c(1600, 2359)
+#     }
+#   }
+#   
+#   return(time_ranges)  
+# }
+getTimeRange <- function(pdt) {
+  if (pdt[i] == 1) {
+      return(c(0, 759))
+    } else if (pdt[i] == 2) {
+      return(c(800, 1559))
     } else {
-        flights <- flights %>% filter(dep >= 1600 & dep <= 2359)
+      return(c(1600, 2359))
     }
-    return(flights)
 }
 
-# Helper function to find connecting flights
-find_connecting_flights = function(dep_airport, arr_airport, pdt_seg, num_connections) {
-    if (num_connections == 0) {
-        return(get_flights(dep_airport, arr_airport, pdt_seg))
-    }
+getAirportLatLng <- function(airport) {
+  if (airport == "LGA") {
+    df <- data.frame(lat = 40.7766, lng = -73.8742)
+    return(df)
+  }
+  latLng <- wc_airports |>
+    filter(code == airport) |> 
+    select(lat, lng)
+
+  return(latLng)
+}
+
+
+formatTime <- function(time) {
+  time_str <- sprintf("%04d", time)
+  res <- paste0(substr(time_str, 1, 2), ":", substr(time_str, 3, 4), ":00")
+  return(res)
+}
+
+
+# QUESTIONS: in the case that we have multiple qualifying non-stop flights, which one do we choose? (arrange by arr date? or flight duration?)
+# QUESTIONS: when we are optimizing the flight dates (one day before match_dt), does this mean departure date or arrival date
+findDirectFlights = function(dep_airport, arr_airport, match_dow, prev_dt, match_dt, pdt) {
+  # get time ranges based on preferred departure time
+  time_ranges <- getTimeRanges(pdt)
+  
+  depLatLng <- getAirportLatLng(dep_airport)
+  
+  arrLatLng <- getAirportLatLng(arr_airport)
+  
+  directFlightOptions <- wc_flights |>
+    filter(orig == dep_airport) |>   # flights departing from dep_airport
+    filter(dest == arr_airport) |>   # flights arriving at arr_airport
+    filter(
+      # make sure the flight options are within the preferred time range for departure
+      # (dep >= time_ranges[1, 1] & dep <= time_ranges[1, 2]) | 
+      # (dep >= time_ranges[2, 1] & dep <= time_ranges[2, 2])
+      (dep >= time_ranges[1] & dep <= time_ranges[2])
+    ) |>
+    # represent day of week of flights numerically
+    mutate(dow = match(dow, c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"))) |>
+    # get departure date for flight
+    mutate(dep_date = 
+             ifelse(dow < match_dow, as.Date(match_dt) - days(match_dow - dow),
+                    as.Date(match_dt) - days(match_dow - dow + 7)),
+           dep_date = as.Date(dep_date)
+           )|>
+    # if it's a red eye flight, arr date becomes the next day
+    mutate(
+      arr_date = ifelse(arr < dep, as.Date(dep_date) + days(1), as.Date(dep_date)),
+      arr_date = as.Date(arr_date)
+    ) |>
+    # make sure that flight is departing only after we're there at location
+    filter(dep_date > as.Date(prev_dt)) |>
+    # make sure flight is arriving a day before match_dt
+    filter(arr_date < as.Date(match_dt)) |>
+    arrange(desc(arr_date)) |>
+    mutate(dist = dist_mi(depLatLng$lat, depLatLng$lng, arrLatLng$lat, arrLatLng$lng))
+  return(directFlightOptions)
+}
+
+# QUESTION: what priority do we select our flight? layover? total_dist? arrival date?
+findOneConnection = function(dep_airport, arr_airport, match_dow, prev_dt, match_dt, pdt) {
+  # get time ranges based on preferred departure time
+  time_ranges <- getTimeRanges(pdt)
+  
+  depLatLng <- getAirportLatLng(dep_airport)
+  
+  arrLatLng <- getAirportLatLng(arr_airport)
+  
+   # --- find qualifying first legs ---
+  qualifyingFirstLeg <- wc_flights |>
+    rowwise() |>
+    filter(orig == dep_airport) |>   # flights departing from dep_airport
+    filter(dest != arr_airport) |>   # first leg of the flight should not arrive at arr_airport
+    filter(
+      # make sure the flight options are within the preferred time range for departure
+      # (dep >= time_ranges[1, 1] & dep <= time_ranges[1, 2]) | 
+      # (dep >= time_ranges[2, 1] & dep <= time_ranges[2, 2])
+      (dep >= time_ranges[1] & dep <= time_ranges[2])
+    ) |>
+    # represent day of week of flights numerically
+    mutate(dow = match(dow, c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"))) |>
+    # get dist between airports 
+    mutate(dist = dist_mi(depLatLng$lat, depLatLng$lng, getAirportLatLng(dest)$lat, getAirportLatLng(dest)$lng)) |>
+    select(dow, dep, arr, orig, dest, dist)
+  
+   # --- find possible second legs ---
+  possibleSecondLeg <- wc_flights |>
+    rowwise() |>
+    filter(orig %in% qualifyingFirstLeg$dest) |>   # orig needs to be a dest of the first leg
+    filter(dest == arr_airport) |>                 # flight goes to final dest (arr_airport)
+    # get dist between airports 
+    mutate(dist = dist_mi(getAirportLatLng(orig)$lat, getAirportLatLng(orig)$lng, arrLatLng$lat, arrLatLng$lng)) |>
+    # represent day of week of flights numerically
+    mutate(dow = match(dow, c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"))) 
+  
+   # --- find qualifying flights with one connection ---
+  qualifyingConnections <- qualifyingFirstLeg |>
+    # merge the first and second legs to form one connection
+    left_join(possibleSecondLeg, by = c('dest' = 'orig'), relationship = "many-to-many") |>
+    # get departure and arrival dates
+    mutate(
+      final_dep_date = ifelse(dow.y < match_dow, 
+                              as.Date(match_dt) - days(match_dow - dow.y),
+                              as.Date(match_dt) - days(match_dow - dow.y + 7)),
+      final_dep_date = as.Date(final_dep_date),
+      final_arr_date = ifelse(arr.y > dep.y, 
+                                     final_dep_date, final_dep_date + days(1)),
+      final_arr_date = as.Date(final_arr_date),
+      first_dep_date = ifelse(dow.x == dow.y, as.Date(final_dep_date), 
+                              ifelse(dow.y > dow.x, 
+                                     as.Date(final_dep_date) - days(dow.y - dow.x),
+                                     as.Date(final_dep_date) - days(dow.y - dow.x + 7))),
+      first_dep_date = as.Date(first_dep_date),
+      first_arr_date = ifelse(arr.x > dep.x, first_dep_date, first_dep_date + days(1)),
+      first_arr_date = as.Date(first_arr_date)
+    ) |>
+    # make sure that flight is departing only after we're there at location
+    filter(first_dep_date > as.Date(prev_dt)) |>
+    # make sure that flight is arriving a day before match_dt
+    filter(final_arr_date < as.Date(match_dt)) |>
+    # calculate layover duration of flights
+    mutate(layover_duration = ifelse(final_arr_date == first_dep_date, 
+                                            hm(dep.y) - hm(arr.x),
+                                     difftime(as.POSIXct(paste(final_arr_date, 
+                                                         formatTime(dep.y)), tz="UTC"), 
+                                              as.POSIXct(paste(first_dep_date,
+                                                         formatTime(arr.x)), tz="UTC"), 
+                                              units = "mins"))) |>
+    # make sure that we have at least an hour in between layover
+    filter(layover_duration >= 60) |>
+    mutate(total_dist = dist.x + dist.y) |>
+    select(
+      first_dow = dow.x,
+      first_dep = dep.x,
+      first_arr = arr.x,
+      first_orig = orig,
+      first_dest = dest,
+      second_dow = dow.y,
+      second_dep = dep.y,
+      second_arr = arr.y,
+      second_dest = dest.y,
+      first_dep_date,
+      first_arr_date,
+      final_dep_date,
+      final_arr_date,
+      first_dist = dist.x,
+      second_dist = dist.y,
+      total_dist,
+      layover_duration
+    ) |>
+    group_by(first_orig, first_dest, second_dest) |>
+    slice(1) |>
+    ungroup() |>
+    arrange(total_dist, desc(final_arr_date), layover_duration) 
+  return(qualifyingConnections)
+}
+
+findTwoConnection = function(dep_airport, arr_airport, match_dow, prev_dt, match_dt, pdt) {
+  # get time ranges based on preferred departure time
+  time_ranges <- getTimeRanges(pdt)
+  
+  depLatLng <- getAirportLatLng(dep_airport)
+  
+  arrLatLng <- getAirportLatLng(arr_airport)
+  
+  # --- find qualifying first leg ---
+  qualifyingFirstLeg <- wc_flights |>
+    filter(orig == dep_airport, # flights departing from dep_airport
+           dest != arr_airport, # first leg of the flight should not arrive at arr_airport
+           # make sure the flight options are within the preferred time range for departure
+           # ((dep >= time_ranges[1, 1] & dep <= time_ranges[1, 2]) | 
+           # (dep >= time_ranges[2, 1] & dep <= time_ranges[2, 2]))
+           (dep >= time_ranges[1] & dep <= time_ranges[2])
+           )   
+  
+  possibleSecondLeg <- wc_flights |>
+    filter(orig %in% qualifyingFirstLeg$dest,
+           dest != arr_airport & dest != dep_airport) 
+  
+  possibleThirdLeg <- wc_flights |>
+    filter(orig %in% possibleSecondLeg$dest,
+           dest == arr_airport) 
+  
+  possibleLastConn <- possibleSecondLeg |>
+    left_join(possibleThirdLeg, by = c('dest' = 'orig'), relationship = "many-to-many") |>
+    mutate(dow.x = match(dow.x, c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")),
+           dow.y = match(dow.y, c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")),
+           final_dep_date = ifelse(dow.y < match_dow, 
+                                   as.Date(match_dt) - days(match_dow - dow.y),
+                            as.Date(match_dt) - days(match_dow - dow.y + 7)),
+           final_dep_date = as.Date(final_dep_date),
+           final_arr_date = ifelse(arr.y > dep.y, 
+                                     final_dep_date, final_dep_date + days(1)),
+           final_arr_date = as.Date(final_arr_date),
+           
+           second_dep_date = ifelse(dow.x == dow.y, as.Date(final_dep_date), 
+                                      ifelse(dow.y > dow.x, 
+                                             as.Date(final_dep_date) - days(dow.y - dow.x),
+                                      as.Date(final_dep_date) - days(dow.y - dow.x + 7))),
+           second_dep_date = as.Date(second_dep_date),
+           second_arr_date = ifelse(arr.x > dep.x, second_dep_date, second_dep_date + days(1)),
+           second_arr_date = as.Date(second_arr_date)
+           ) |>
+    filter(final_arr_date < as.Date(match_dt)) |>
+    mutate(second_layover_duration = ifelse(final_arr_date == second_dep_date, 
+                                            hm(dep.y) - hm(arr.x),
+                                     difftime(as.POSIXct(paste(final_arr_date, 
+                                                         formatTime(dep.y)), tz="UTC"), 
+                                              as.POSIXct(paste(second_dep_date,
+                                                         formatTime(arr.x)), tz="UTC"), 
+                                              units = "mins"))) |>
+    filter(second_layover_duration >= 60) 
+  
+  qualifyingConns <- qualifyingFirstLeg |>
+    inner_join(possibleLastConn, by = c("dest" = "orig"), relationship = "many-to-many") |>
+    select(first_dow = dow,
+           first_dep = dep,
+           first_arr = arr,
+           first_orig = orig,
+           first_dest = dest,
+           second_dow = dow.x,
+           second_dep = dep.x,
+           second_arr = arr.x,
+           second_dest = dest.y,
+           third_dow = dow.y,
+           third_dep = dep.y,
+           third_arr = arr.y,
+           third_dest = dest.y.y,
+           second_dep_date,
+           second_arr_date,
+           final_dep_date,
+           final_arr_date,
+           second_layover_duration
+           ) |>
+    mutate(first_dow = match(first_dow, c("SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT")),
+           first_dep_date = ifelse(first_dow == second_dow, as.Date(second_dep_date),
+                             ifelse(second_dow > first_dow,
+                                    as.Date(second_dep_date) - days(second_dow - first_dow),
+                                    as.Date(second_dep_date) - days(second_dow - first_dow + 7))),
+           first_dep_date = as.Date(first_dep_date),
+           first_arr_date = ifelse(first_arr > first_dep, first_dep_date, 
+                                   first_dep_date + days(1)),
+           first_arr_date = as.Date(first_arr_date)
+           ) |>
+    mutate(first_layover_duration = ifelse(first_arr_date == second_dep_date,
+                                           hm(second_dep) - hm(first_arr),
+                                     difftime(as.POSIXct(paste(second_dep_date,
+                                                         formatTime(second_dep)), tz="UTC"),
+                                              as.POSIXct(paste(first_arr_date,
+                                                         formatTime(first_arr)), tz="UTC"),
+                                              units = "mins")),
+           total_layover_duration = second_layover_duration + first_layover_duration) |>
+    filter(first_layover_duration >= 60) |>
+    # make sure that flight is departing only after we're there at location
+    filter(first_dep_date > as.Date(prev_dt)) |>
+    group_by(first_orig, first_dest, second_dest, third_dest) |>
+    slice(1) |>
+    ungroup() |>
+    arrange(desc(final_arr_date), total_layover_duration) 
+
+  qualifyingConns <- qualifyingConns |>
+    rowwise() |>
+    mutate(first_dist = dist_mi(getAirportLatLng(first_orig)$lat,
+                                getAirportLatLng(first_orig)$lng,
+                                getAirportLatLng(first_dest)$lat,
+                                getAirportLatLng(first_dest)$lng),
+           second_dist = dist_mi(getAirportLatLng(first_dest)$lat,
+                                getAirportLatLng(first_dest)$lng,
+                                getAirportLatLng(second_dest)$lat,
+                                getAirportLatLng(second_dest)$lng),
+           third_dist =  dist_mi(getAirportLatLng(second_dest)$lat,
+                                getAirportLatLng(second_dest)$lng,
+                                getAirportLatLng(third_dest)$lat,
+                                getAirportLatLng(third_dest)$lng),
+           total_dist = first_dist + second_dist + third_dist
+             ) |>
+    arrange(total_dist, desc(final_arr_date), total_layover_duration)
+  return(qualifyingConns)
+}
+
+
+
+itinerary = function(ctry, pdt, conn) {
+    # filter based on country wished to follow & get the venues/cities/lat/lng that they will
+    # be playing in (arranged by dates)
+    countryInfo <- wc_sched |>
+        filter(ctry_a == ctry | ctry_b == ctry) |>
+        arrange(match_dt) |>
+        select(match_dt, venue, city, lat, lng)
+
+    # find the nearest airport for each venue
+    countryInfo <- countryInfo |>
+      rowwise() |>
+      mutate(
+        nearestAirport = findNearestAirport(lat, lng)$code,
+        wkday = wday(match_dt, label = FALSE)) 
     
-    all_routes <- data.frame()
-    intermediate_airports <- unique(wc_flights$orig)
+    # initialize empty itinerary dataframe
+    itin <- data.frame()
     
-    for (int_airport in intermediate_airports) {
-        if (int_airport != dep_airport && int_airport != arr_airport) {
-            # Get first leg flights
-            first_leg <- get_flights(dep_airport, int_airport, pdt_seg)
+    for (i in 1:(nrow(countryInfo) - 1)) {
+        dep_airport <- countryInfo$nearestAirport[i]
+        arr_airport <- countryInfo$nearestAirport[i + 1]
+        match_dow <- countryInfo$wkday[i + 1]
+        match_dt <- countryInfo$match_dt[i + 1]
+        prev_dt <- countryInfo$match_dt[i]
+        
+        
+        flt_number <- ifelse(i == 1, 12, 23)
+        if (conn[i] == 0) {
+            flight <- findDirectFlights(dep_airport, 
+                                        arr_airport, match_dow, prev_dt, match_dt, pdt[i]) [1,]
+            itin <- rbind(itin, data.frame(
+                flt = flt_number, leg = 1, 
+                dep = flight$orig, arr = flight$dest, 
+                dod = flight$dep_date, tod = flight$dep,
+                doa = flight$arr_date, toa = flight$arr,
+                dist = flight$dist))
+        } else if (conn[i] == 1) {
+            flight <- findOneConnection(dep_airport, 
+                                        arr_airport, match_dow, prev_dt, match_dt, pdt[i])[1,]
+            itin <- rbind(itin, data.frame(
+                flt = flt_number, leg = 1, 
+                dep = flight$first_orig, arr = flight$first_dest, 
+                dod = flight$first_dep_date, tod = flight$first_dep,
+                doa = flight$first_arr_date, toa = flight$first_arr,
+                dist = flight$first_dist))
+            itin <- rbind(itin, data.frame(
+              flt = flt_number, leg = 2,
+              dep = flight$first_dest, arr = flight$second_dest,
+              dod = flight$final_dep_date, tod = flight$second_dep,
+              doa = flight$final_arr_date, toa = flight$second_arr,
+              dist = flight$second_dist
+            ))
+        } else {
+            flight <- findTwoConnection(dep_airport, 
+                                        arr_airport, match_dow, prev_dt, match_dt, pdt[i])[1,]
+            itin <- rbind(itin, data.frame(
+                flt = flt_number, leg = 1, 
+                dep = flight$first_orig, arr = flight$first_dest, 
+                dod = flight$first_dep_date, tod = flight$first_dep,
+                doa = flight$first_arr_date, toa = flight$first_arr,
+                dist = flight$first_dist))
+            itin <- rbind(itin, data.frame(
+              flt = flt_number, leg = 2,
+              dep = flight$first_dest, arr = flight$second_dest,
+              dod = flight$second_dep_date, tod = flight$second_dep,
+              doa = flight$second_arr_date, toa = flight$second_arr,
+              dist = flight$second_dist
+            ))
+            itin <- rbind(itin, data.frame(
+              flt = flt_number, leg = 3,
+              dep = flight$second_dest, arr = flight$third_dest,
+              dod = flight$final_dep_date, tod = flight$third_dep,
+              doa = flight$final_arr_date, toa = flight$third_arr,
+              dist = flight$third_dist
+            ))
             
-            if (nrow(first_leg) > 0) {
-                for (j in seq_len(nrow(first_leg))) {  
-                    second_leg <- wc_flights %>%
-                        filter(
-                            orig == int_airport,
-                            dest == arr_airport,
-                            dep >= first_leg$arr[j] + 100
-                        )
-                    
-                    if (nrow(second_leg) > 0) {
-                        for (k in seq_len(nrow(second_leg))) {
-                            route <- data.frame(
-                                dep = first_leg$orig[j],
-                                arr = second_leg$dest[k],
-                                dep_time = first_leg$dep[j],
-                                arr_time = second_leg$arr[k],
-                                total_distance = dist_mi(
-                                    wc_airports$lat[wc_airports$code == dep_airport],
-                                    wc_airports$lng[wc_airports$code == dep_airport],
-                                    wc_airports$lat[wc_airports$code == arr_airport],
-                                    wc_airports$lng[wc_airports$code == arr_airport]
-                                )
-                            )
-                            all_routes <- bind_rows(all_routes, route)
-                        }
-                    }
-                }
-            }
         }
     }
-    
-    # Sort by total distance and return best option
-    return(all_routes %>% arrange(total_distance) %>% slice(1))
+    return(itin)
+
 }
+
 ```
 
 Create an actual itinerary using the function with the following conditions:
@@ -331,7 +603,21 @@ Display your itinerary using `gt`. Stylize the table to look neat and organized.
 
 ```{r a1b}
 our_itinerary = itinerary(ctry = our_country, pdt = c(1, 3), conn = c(0, 2))
-our_itinerary
+our_itinerary |> 
+  gt() |>
+  tab_header(title = "Itinerary to Follow Argentina in 2026 World Cup") |>
+  cols_label(
+    flt = "Flight No.",
+    leg = "Leg No.",
+    dep = "Depature Airport",
+    arr = "Arrival Airport",
+    dod = "Date of Departure",
+    tod = "Time of Depature",
+    doa = "Date of Arrival",
+    toa = "Time of Arrival",
+    dist = "Distance"
+  ) |>
+  opt_stylize(style = 6, color = "cyan")
 
 
 ```
@@ -359,7 +645,36 @@ Create a list, called `golf_round`, that contains the following elements:
 
 ```{r a2}
 
+# find a golf course near Boston since we have free time on the 22nd of june in Boston to play a round of golf
+countryInfo <- wc_sched |>
+  filter(ctry_a == our_country | ctry_b == our_country) |>
+  arrange(match_dt) |>
+  select(ctry_a, ctry_b, match_dt, venue, city, lat, lng)
 
+latLng <- countryInfo |>
+  filter(venue == "Gillette Stadium") |>
+  select(lat, lng)
+
+
+findClosestGolfCourse <- function(latLng) {
+  golfInfo <- wc_golf |>
+    mutate(dist = dist_mi(latLng$lat, latLng$lng, lat, lng)) |>
+    arrange(dist) |>
+    slice(1)
+}
+
+golfCourse <- findClosestGolfCourse(latLng)
+
+golf_round <- list(
+  course = golfCourse$course,
+  tee_time = as.POSIXct("2026-06-22 15:00:00"),
+  dist = golfCourse$dist,
+  reason = "Since we are arriving two days prior to Argentina's match against Tunisia in Boston, we might as well play a round of golf near the Gillette Stadium.",
+  architect = "Willie Campbell, Alex Campbell, William S. Flynn",
+  fun_fact = "It was, in fact, the very first country club in the U.S., dating to 1882."
+)
+
+golf_round
 ```
 
 #### A3. The Travel Map \[*10 pts*\]
@@ -378,7 +693,42 @@ Use an appropriate set of provider tiles to allow the markers to clearly stand o
 
 golf_marker = 'https://www.dropbox.com/scl/fi/rdsbwddqv46ebrjt5tecj/golf_marker.png?rlkey=nko2qqggh6blvzfs7m0463xlf&st=mbzlrj0c&raw=1'
 
+countryInfo <- countryInfo |>
+  mutate(match_num = row_number(),
+         popup = paste0(
+           "Venue: ", venue, "<br>",
+           "Match Date: ", match_dt, "<br>",
+           "Located in: ", city, "<br>",
+           "Latitude: ", lat, "<br>",
+           "Longitude: ", lng, "<br>",
+           "Country ", ctry_a, " is playing against ", ctry_b, ".<br>"
+         ))
 
+golf_icon <- makeIcon(
+  iconUrl = golf_marker,
+  iconWidth = 30,   
+  iconHeight = 30
+)
+
+golf_popup <- paste0(
+  "Course: ", golfCourse$course, "<br>",
+  "Country: ", golfCourse$country, "<br>",
+  "Latitude: ", golfCourse$lat, "<br>",
+  "Longitude: ", golfCourse$lng, "<br>",
+  "Architects: ", golf_round$architect, "<br>",
+  "Distance from Gillette Stadium: ", golf_round$dist, "<br>",
+  "Fun Fact: ", golf_round$fun_fact, "<br>"
+)
+
+leaflet() |>
+  addProviderTiles(providers$CartoDB.Positron) |> 
+  addAwesomeMarkers(data = countryInfo, ~lng, ~lat,
+                    label = ~match_num,
+                    popup = ~popup) |>
+  addMarkers(data = golfCourse, ~lng, ~lat, 
+             icon = golf_icon,
+             label = "Golf Course (The Country Club)",
+             popup = golf_popup)
 ```
 
 #### A4. Summary \[*3 pts*\]
@@ -1039,9 +1389,9 @@ hchart(
 
 
 ```
+
 ```{r test}
 ```
-
 
 ------------------------------------------------------------------------
 
