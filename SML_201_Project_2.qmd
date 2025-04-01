@@ -214,10 +214,10 @@ findNearestAirport = function(given_lat, given_lng) {
 #   
 #   return(time_ranges)  
 # }
-getTimeRange <- function(pdt) {
-  if (pdt[i] == 1) {
+getTimeRanges <- function(pdt) {
+  if (pdt == 1) {
       return(c(0, 759))
-    } else if (pdt[i] == 2) {
+    } else if (pdt == 2) {
       return(c(800, 1559))
     } else {
       return(c(1600, 2359))
