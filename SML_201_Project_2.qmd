@@ -919,13 +919,12 @@ Is `model1` or `model2` better for predicting `xg`? Provide your reasons in the 
 
 ```{r b3a}
 # log(xg) to make it linear, xg can't be 0
-wc_shots = wc_shots %>% 
-  mutate(
-    transform_xg = ifelse(xg != 0, log(xg), log(1))
-  )
+wc_shots_clean = wc_shots %>% 
+  filter(xg != 0) %>% 
+  mutate(transform_xg = log(xg))
 
 # linear regression model
-model2 = lm(transform_xg ~ d + theta, wc_shots)
+model2 = lm(transform_xg ~ d + theta, wc_shots_clean)
 model2
 
 # R^2 value - greater than 0.5
