@@ -1366,6 +1366,21 @@ round_of_32 = function(knockout_countries) {
     return(winners)
 }
 
+run_round = function(winners, matchups) {
+    winners = c()
+    for (match in matchups) {
+        team_a = match[1]
+        team_b = match[2]
+        result = game_model(team_a, team_b)
+        if (result[1] > result[2]) {
+            winners = c(winners, team_a)
+        } else {
+            winners = c(winners, team_b)
+        }
+    }
+    return(winners)
+}
+
 
 winners_32 = round_of_32(knockout_countries)
 matchups_16 = list(
@@ -1393,21 +1408,6 @@ matchups_f = list(
 
 winners = run_round(winners_sf, matchups_f)
 winners
-
-run_round = function(winners, matchups) {
-    winners = c()
-    for (match in matchups) {
-        team_a = match[1]
-        team_b = match[2]
-        result = game_model(team_a, team_b)
-        if (result[1] > result[2]) {
-            winners = c(winners, team_a)
-        } else {
-            winners = c(winners, team_b)
-        }
-    }
-    return(winners)
-}
 
 ```
 
