@@ -807,7 +807,11 @@ leaflet() |>
   addMarkers(data = getGolfInfo, ~lng, ~lat, 
              icon = golf_icon,
              label = "Golf Course (The Country Club)",
-             popup = golf_popup)
+             popup = golf_popup) |>
+  setView(
+    lng = mean(c(country_info$lng, getGolfInfo$lng)),
+    lat = mean(c(country_info$lat, getGolfInfo$lat)),
+    zoom = 6)
 ```
 
 #### A4. Summary \[*3 pts*\]
